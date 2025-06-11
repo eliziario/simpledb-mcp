@@ -68,6 +68,7 @@ func (m *Manager) createRawConnection(connConfig config.Connection, connectionNa
 		}
 		username = cred.Username
 		password = cred.Password
+		
 	}
 
 	// Build connection string
@@ -82,6 +83,14 @@ func (m *Manager) createRawConnection(connConfig config.Connection, connectionNa
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
 
+	// Test the connection immediately
+	if err := db.Ping(); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to ping database: %w (and failed to close: %v)", err, closeErr)
+		}
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -89,9 +98,9 @@ func (m *Manager) buildDSN(conn config.Connection, username, password string) (s
 	switch conn.Type {
 	case "mysql":
 		if username == "" {
-			return fmt.Sprintf("tcp(%s:%d)/%s", conn.Host, conn.Port, conn.Database), nil
+			return fmt.Sprintf("tcp(%s:%d)/%s?parseTime=true&loc=Local", conn.Host, conn.Port, conn.Database), nil
 		}
-		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, conn.Host, conn.Port, conn.Database), nil
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=Local&charset=utf8mb4&allowNativePasswords=true", username, password, conn.Host, conn.Port, conn.Database), nil
 	
 	case "postgres":
 		dsn := fmt.Sprintf("host=%s port=%d dbname=%s", conn.Host, conn.Port, conn.Database)

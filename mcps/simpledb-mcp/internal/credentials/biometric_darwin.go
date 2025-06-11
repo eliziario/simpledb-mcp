@@ -23,7 +23,6 @@ func (m *Manager) getMacOSWithBiometric(key string) (string, error) {
 
 	// If authenticated, get the password from keychain
 	password, err := keyring.Get(ServiceName, key)
-	fmt.Printf("Password: %s\n", password)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve password from keychain: %w", err)
 	}

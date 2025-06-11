@@ -1,8 +1,10 @@
 package credentials
 
 import (
+	"encoding/base64"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,7 +40,7 @@ func NewManager(cacheTime time.Duration) *Manager {
 
 func (m *Manager) Store(connectionName, username, password string) error {
 	key := fmt.Sprintf("%s:%s", connectionName, username)
-	
+
 	if err := keyring.Set(ServiceName, key, password); err != nil {
 		return fmt.Errorf("failed to store credential in keychain: %w", err)
 	}
@@ -76,23 +78,29 @@ func (m *Manager) Get(connectionName, username string) (*Credential, error) {
 		return nil, fmt.Errorf("failed to retrieve credential: %w", err)
 	}
 
+	// Decode password if it's base64-encoded by go-keyring
+	decodedPassword, err := m.decodePassword(password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode password: %w", err)
+	}
+
 	// Update cache
 	m.cacheMutex.Lock()
 	m.cache[key] = cachedCredential{
-		password:  password,
+		password:  decodedPassword,
 		timestamp: time.Now(),
 	}
 	m.cacheMutex.Unlock()
 
 	return &Credential{
 		Username: username,
-		Password: password,
+		Password: decodedPassword,
 	}, nil
 }
 
 func (m *Manager) Delete(connectionName, username string) error {
 	key := fmt.Sprintf("%s:%s", connectionName, username)
-	
+
 	if err := keyring.Delete(ServiceName, key); err != nil {
 		return fmt.Errorf("failed to delete credential from keychain: %w", err)
 	}
@@ -127,4 +135,25 @@ func (m *Manager) TestConnection(connectionName, username string) error {
 	// This will trigger biometric auth if needed
 	_, err := m.Get(connectionName, username)
 	return err
+}
+
+// decodePassword handles base64-encoded passwords from go-keyring
+func (m *Manager) decodePassword(password string) (string, error) {
+	// Check if password has the go-keyring base64 prefix
+	if strings.HasPrefix(password, "go-keyring-base64:") {
+		encoded := strings.TrimPrefix(password, "go-keyring-base64:")
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode base64 password: %w", err)
+		}
+		password = string(decoded)
+	}
+	// Remove surrounding quotes and brackets if present
+	if strings.HasPrefix(password, "[") && strings.HasSuffix(password, "]") {
+		password = strings.TrimPrefix(password, "[")
+		password = strings.TrimSuffix(password, "]")
+	}
+
+	// Return as-is if not base64-encoded
+	return password, nil
 }
