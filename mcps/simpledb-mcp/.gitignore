@@ -1,0 +1,62 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Release packages
+releases/
+dist/
+
+# Local config files (contain sensitive data)
+config.yaml
+*.yaml.local
+*.yaml.backup
+
+# Credential files
+*.keychain
+*.credentials
+
+# Claude Code files
+.claude/
+CLAUDE.md.backup
+claude-*.log
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

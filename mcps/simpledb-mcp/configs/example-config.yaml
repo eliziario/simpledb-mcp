@@ -1,0 +1,29 @@
+connections:
+  local-mysql:
+    type: mysql
+    host: localhost
+    port: 3306
+    database: test
+    username: root
+  
+  local-postgres:
+    type: postgres
+    host: localhost
+    port: 5432
+    database: postgres
+    ssl_mode: disable
+    username: postgres
+
+settings:
+  query_timeout: 30s
+  max_rows: 1000
+  cache_credentials: 5m
+  require_biometric: true
+  
+  # Connection pool settings for keeping database connections alive
+  connection_pool:
+    enable_keepalive: true      # Enable background connection monitoring
+    ping_interval: 30s          # How often to ping connections to keep them alive
+    max_idle_time: 15m          # Maximum time a connection can be idle before cleanup
+    max_error_count: 3          # Maximum consecutive errors before closing connection
+    reconnect_delay: 5s         # Delay before attempting to reconnect after error
