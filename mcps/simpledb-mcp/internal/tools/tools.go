@@ -166,6 +166,8 @@ func (h *Handler) listDatabases(args ListDatabasesArgs) (*mcp_golang.ToolRespons
 		databases, err = h.dbManager.ListDatabasesMySQL(args.Connection)
 	case "postgres":
 		databases, err = h.dbManager.ListDatabasesPostgres(args.Connection)
+	case "salesforce":
+		databases, err = h.dbManager.ListDatabasesSalesforce(args.Connection)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
 	}
@@ -200,6 +202,16 @@ func (h *Handler) listSchemas(args ListSchemasArgs) (*mcp_golang.ToolResponse, e
 		return mcp_golang.NewToolResponse(content), nil
 	case "mysql":
 		return nil, fmt.Errorf("MySQL does not support schemas - use list_databases instead")
+	case "salesforce":
+		schemas, err := h.dbManager.ListSchemasSalesforce(args.Connection, args.Database)
+		if err != nil {
+			return nil, err
+		}
+		content, err := newJSONContent(schemas)
+		if err != nil {
+			return nil, err
+		}
+		return mcp_golang.NewToolResponse(content), nil
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
 	}
@@ -219,6 +231,9 @@ func (h *Handler) listTables(args ListTablesArgs) (*mcp_golang.ToolResponse, err
 		tables, err = h.dbManager.ListTablesMySQL(args.Connection, args.Database)
 	case "postgres":
 		tables, err = h.dbManager.ListTablesPostgres(args.Connection, args.Database, args.Schema)
+	case "salesforce":
+		// For Salesforce, ignore database and schema parameters
+		tables, err = h.dbManager.ListTablesSalesforce(args.Connection)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
 	}
@@ -248,6 +263,9 @@ func (h *Handler) describeTable(args DescribeTableArgs) (*mcp_golang.ToolRespons
 		columns, err = h.dbManager.DescribeTableMySQL(args.Connection, args.Database, args.Table)
 	case "postgres":
 		columns, err = h.dbManager.DescribeTablePostgres(args.Connection, args.Database, args.Table, args.Schema)
+	case "salesforce":
+		// For Salesforce, ignore database and schema parameters, use table as object name
+		columns, err = h.dbManager.DescribeTableSalesforce(args.Connection, args.Table)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
 	}
@@ -277,6 +295,9 @@ func (h *Handler) listIndexes(args ListIndexesArgs) (*mcp_golang.ToolResponse, e
 		indexes, err = h.dbManager.ListIndexesMySQL(args.Connection, args.Database, args.Table)
 	case "postgres":
 		indexes, err = h.dbManager.ListIndexesPostgres(args.Connection, args.Database, args.Table, args.Schema)
+	case "salesforce":
+		// For Salesforce, ignore database and schema parameters, use table as object name
+		indexes, err = h.dbManager.ListIndexesSalesforce(args.Connection, args.Table)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
 	}
@@ -319,6 +340,9 @@ func (h *Handler) getTableSample(args GetTableSampleArgs) (*mcp_golang.ToolRespo
 		sample, err = h.dbManager.GetTableSampleMySQL(args.Connection, args.Database, args.Table, limit)
 	case "postgres":
 		sample, err = h.dbManager.GetTableSamplePostgres(args.Connection, args.Database, args.Table, args.Schema, limit)
+	case "salesforce":
+		// For Salesforce, ignore database and schema parameters, use table as object name
+		sample, err = h.dbManager.GetTableSampleSalesforce(args.Connection, args.Table, limit)
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
 	}
