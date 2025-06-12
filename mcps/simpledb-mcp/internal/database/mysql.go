@@ -3,7 +3,33 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+	"unicode"
 )
+
+// cleanTextForJSON cleans and truncates text for safe JSON serialization
+func cleanTextForJSON(text string) string {
+	// Truncate very long text fields
+	const maxLength = 500
+	if len(text) > maxLength {
+		text = text[:maxLength] + "... [truncated]"
+	}
+	
+	// Remove or replace problematic characters
+	text = strings.Map(func(r rune) rune {
+		// Keep printable characters and common whitespace
+		if unicode.IsPrint(r) || r == '\n' || r == '\r' || r == '\t' {
+			return r
+		}
+		// Replace non-printable characters with space
+		return ' '
+	}, text)
+	
+	// Clean up excessive whitespace
+	text = strings.TrimSpace(text)
+	
+	return text
+}
 
 func (m *Manager) ListDatabasesMySQL(connectionName string) ([]string, error) {
 	db, err := m.GetConnection(connectionName)
@@ -185,8 +211,13 @@ func (m *Manager) GetTableSampleMySQL(connectionName, database, tableName string
 		row := make(map[string]interface{})
 		for i, col := range columns {
 			val := values[i]
-			if b, ok := val.([]byte); ok {
-				row[col] = string(b)
+			if val == nil {
+				row[col] = nil
+			} else if b, ok := val.([]byte); ok {
+				// Handle byte arrays (TEXT, VARCHAR, etc.)
+				text := string(b)
+				// Escape and clean text for JSON safety
+				row[col] = cleanTextForJSON(text)
 			} else {
 				row[col] = val
 			}

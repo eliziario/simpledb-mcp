@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -60,6 +61,15 @@ type GetConnectionStatusArgs struct {
 }
 
 type GetPoolMetricsArgs struct{}
+
+// Helper function to create JSON content
+func newJSONContent(data interface{}) (*mcp_golang.Content, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	return mcp_golang.NewTextContent(string(jsonData)), nil
+}
 
 func NewHandler(dbManager *database.Manager, config *config.Config, server *mcp_golang.Server) (*Handler, error) {
 	h := &Handler{
@@ -135,9 +145,11 @@ func (h *Handler) listConnections(args ListConnectionsArgs) (*mcp_golang.ToolRes
 		})
 	}
 
-	return mcp_golang.NewToolResponse(
-		mcp_golang.NewTextContent(fmt.Sprintf("Found %d configured connections", len(connections))),
-	), nil
+	content, err := newJSONContent(connections)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_golang.NewToolResponse(content), nil
 }
 
 func (h *Handler) listDatabases(args ListDatabasesArgs) (*mcp_golang.ToolResponse, error) {
@@ -162,9 +174,11 @@ func (h *Handler) listDatabases(args ListDatabasesArgs) (*mcp_golang.ToolRespons
 		return nil, err
 	}
 
-	return mcp_golang.NewToolResponse(
-		mcp_golang.NewTextContent(fmt.Sprintf("Found %d databases: %v", len(databases), databases)),
-	), nil
+	content, err := newJSONContent(databases)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_golang.NewToolResponse(content), nil
 }
 
 func (h *Handler) listSchemas(args ListSchemasArgs) (*mcp_golang.ToolResponse, error) {
@@ -179,9 +193,11 @@ func (h *Handler) listSchemas(args ListSchemasArgs) (*mcp_golang.ToolResponse, e
 		if err != nil {
 			return nil, err
 		}
-		return mcp_golang.NewToolResponse(
-			mcp_golang.NewTextContent(fmt.Sprintf("Found %d schemas: %v", len(schemas), schemas)),
-		), nil
+		content, err := newJSONContent(schemas)
+		if err != nil {
+			return nil, err
+		}
+		return mcp_golang.NewToolResponse(content), nil
 	case "mysql":
 		return nil, fmt.Errorf("MySQL does not support schemas - use list_databases instead")
 	default:
@@ -211,9 +227,11 @@ func (h *Handler) listTables(args ListTablesArgs) (*mcp_golang.ToolResponse, err
 		return nil, err
 	}
 
-	return mcp_golang.NewToolResponse(
-		mcp_golang.NewTextContent(fmt.Sprintf("Found %d tables in %s", len(tables), args.Database)),
-	), nil
+	content, err := newJSONContent(tables)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_golang.NewToolResponse(content), nil
 }
 
 func (h *Handler) describeTable(args DescribeTableArgs) (*mcp_golang.ToolResponse, error) {
@@ -238,9 +256,11 @@ func (h *Handler) describeTable(args DescribeTableArgs) (*mcp_golang.ToolRespons
 		return nil, err
 	}
 
-	return mcp_golang.NewToolResponse(
-		mcp_golang.NewTextContent(fmt.Sprintf("Table %s has %d columns", args.Table, len(columns))),
-	), nil
+	content, err := newJSONContent(columns)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_golang.NewToolResponse(content), nil
 }
 
 func (h *Handler) listIndexes(args ListIndexesArgs) (*mcp_golang.ToolResponse, error) {
@@ -265,9 +285,11 @@ func (h *Handler) listIndexes(args ListIndexesArgs) (*mcp_golang.ToolResponse, e
 		return nil, err
 	}
 
-	return mcp_golang.NewToolResponse(
-		mcp_golang.NewTextContent(fmt.Sprintf("Table %s has %d indexes", args.Table, len(indexes))),
-	), nil
+	content, err := newJSONContent(indexes)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_golang.NewToolResponse(content), nil
 }
 
 func (h *Handler) getTableSample(args GetTableSampleArgs) (*mcp_golang.ToolResponse, error) {
@@ -278,7 +300,7 @@ func (h *Handler) getTableSample(args GetTableSampleArgs) (*mcp_golang.ToolRespo
 
 	limit := args.Limit
 	if limit == 0 {
-		limit = 10 // default
+		limit = 3 // default - keep low for readability
 	}
 
 	// Enforce max limit
@@ -305,10 +327,14 @@ func (h *Handler) getTableSample(args GetTableSampleArgs) (*mcp_golang.ToolRespo
 		return nil, err
 	}
 
-	totalSampled := sample["total_sampled"].(int)
-	return mcp_golang.NewToolResponse(
-		mcp_golang.NewTextContent(fmt.Sprintf("Retrieved %d sample rows from table %s", totalSampled, args.Table)),
-	), nil
+	// Return array of dictionaries for better readability
+	rows := sample["rows"].([]map[string]interface{})
+	
+	content, err := newJSONContent(rows)
+	if err != nil {
+		return nil, err
+	}
+	return mcp_golang.NewToolResponse(content), nil
 }
 
 func (h *Handler) getConnectionStatus(args GetConnectionStatusArgs) (*mcp_golang.ToolResponse, error) {

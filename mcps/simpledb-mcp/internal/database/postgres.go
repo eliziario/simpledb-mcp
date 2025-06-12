@@ -246,8 +246,13 @@ func (m *Manager) GetTableSamplePostgres(connectionName, database, tableName, sc
 		row := make(map[string]interface{})
 		for i, col := range columns {
 			val := values[i]
-			if b, ok := val.([]byte); ok {
-				row[col] = string(b)
+			if val == nil {
+				row[col] = nil
+			} else if b, ok := val.([]byte); ok {
+				// Handle byte arrays (TEXT, VARCHAR, etc.)
+				text := string(b)
+				// Escape and clean text for JSON safety
+				row[col] = cleanTextForJSON(text)
 			} else {
 				row[col] = val
 			}
