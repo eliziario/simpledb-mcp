@@ -20,7 +20,11 @@ type Connection struct {
 	Port     int    `yaml:"port"`
 	Database string `yaml:"database"`
 	SSLMode  string `yaml:"ssl_mode,omitempty"` // for postgres
-	Username string `yaml:"username,omitempty"` // optional, can be stored in keychain
+   Username  string `yaml:"username,omitempty"` // optional, can be stored in keychain
+   // AWS Glue MFA/STS settings
+   RoleArn   string `yaml:"role_arn,omitempty"`   // IAM role ARN for AWS Glue
+   MFASerial string `yaml:"mfa_serial,omitempty"` // MFA device ARN for STS assume-role
+   UseGauth  bool   `yaml:"use_gauth,omitempty"`  // Use gauth tool vs native macOS dialog
 }
 
 type Settings struct {

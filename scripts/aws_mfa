@@ -1,0 +1,603 @@
+#!/bin/bash
+
+# AWS MFA Authentication Menu Script
+
+# Check if the script is being sourced or executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo -e "\033[0;31m✗ Error: This script should be sourced, not executed directly.\033[0m"
+    echo -e "\033[0;33mℹ Usage: source $(basename "$0") or . $(basename "$0")\033[0m"
+    exit 1
+fi
+
+# Terminal colors and styling
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+RESET='\033[0m'
+BOX_H="-"
+BOX_V="|"
+BOX_TL="+"
+BOX_TR="+"
+BOX_BL="+"
+BOX_BR="+"
+
+# Function to cleanup terminal state on exit
+cleanup_terminal() {
+    tput sgr0   # Reset all attributes
+    tput cnorm  # Show cursor
+    stty echo   # Enable terminal echo
+    # Reset trap
+    trap - EXIT SIGINT SIGTERM
+}
+
+# Set trap for cleanup on exit
+trap cleanup_terminal EXIT SIGINT SIGTERM
+
+# Function to draw a box with title
+draw_box() {
+    local title="$1"
+    local width=60
+    local title_padding=$(( (width - ${#title}) / 2 ))
+    local right_padding=$((width - title_padding - ${#title}))
+    
+    echo -e "${CYAN}${BOX_TL}$(printf "%0.s${BOX_H}" $(seq 1 $width))${BOX_TR}${RESET}"
+    echo -e "${CYAN}${BOX_V}${RESET}${BOLD}$(printf "%${title_padding}s")${title}$(printf "%${right_padding}s")${RESET}${CYAN}${BOX_V}${RESET}"
+    echo -e "${CYAN}${BOX_BL}$(printf "%0.s${BOX_H}" $(seq 1 $width))${BOX_BR}${RESET}"
+}
+
+# Function to print a section header
+print_header() {
+    local text="$1"
+    echo -e "\n${BLUE}${BOLD}[ ${text} ]${RESET}\n"
+}
+
+# Function to print a success message
+print_success() {
+    echo -e "${GREEN}✓ $1${RESET}"
+}
+
+#error message
+print_error() {
+    echo -e "${RED}✗ $1${RESET}"
+}
+
+# warning/info message
+print_info() {
+    echo -e "${YELLOW}ℹ $1${RESET}"
+}
+
+# Check if config directory exists, create if not
+CONFIG_DIR="$HOME/.config"
+CONFIG_FILE="$CONFIG_DIR/.aws_menu.ini"
+
+# Create default config file if it doesn't exist
+if [ ! -f "$CONFIG_FILE" ]; then
+    print_info "Creating default config file at $CONFIG_FILE"
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_FILE" << EOF
+# AWS Menu Configuration
+AWS_ACCOUNT_ID=314904127601
+IAM_USERNAME=yourusername (usually something like first.last)
+ROLE_NAME=AdminRole
+MFA_SERIAL_NUMBER= / Go to IAM and find  
+SESSION_NAME=console-session
+DURATION_SECONDS=3600
+GOAUTH_PROFILE=AWSPL
+GAUTH_PATH=~/go/bin/gauth
+EOF
+    chmod 600 "$CONFIG_FILE"
+fi
+
+# Load configuration
+source "$CONFIG_FILE"
+ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/$ROLE_NAME"
+
+# Function to get MFA token
+get_mfa_token() {
+       
+    TOKEN_CODE=$($GAUTH_PATH $GOAUTH_PROFILE -b)
+    if [[ -z "$TOKEN_CODE" ]]; then
+        print_error "Failed to get MFA token. Exiting."  
+        return 1
+    fi    
+    echo $TOKEN_CODE
+}
+
+# Function to show aws-load-creds reminder
+show_load_creds_reminder() {
+    echo ""
+    print_info "To use these credentials in other shells:"
+    print_info "Run 'aws-load-creds' in any new terminal"
+    echo ""
+}
+
+# Function for standard AWS CLI auth with MFA
+aws_cli_auth() {
+    clear
+    draw_box "AWS CLI AUTHENTICATION"
+    echo ""
+    print_info "Authenticating for AWS CLI with MFA..."
+    
+    # Clear any existing AWS credentials
+    unset AWS_ACCESS_KEY_ID
+    unset AWS_SECRET_ACCESS_KEY
+    unset AWS_SESSION_TOKEN
+
+    STANDARD_LOGIN_DURATION=28800
+    
+    # Get MFA token
+    TOKEN_CODE=$(get_mfa_token)
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi
+    
+    echo -e "${CYAN}Getting session token...${RESET}"
+    # Get session token with MFA
+    SESSION_OUTPUT=$(aws sts get-session-token \
+        --serial-number "$MFA_SERIAL_NUMBER" \
+        --token-code "$TOKEN_CODE" \
+        --duration-seconds "$STANDARD_LOGIN_DURATION" \
+        --output json)
+    
+    # Extract credentials
+    export AWS_ACCESS_KEY_ID=$(echo "$SESSION_OUTPUT" | jq -r .Credentials.AccessKeyId)
+    export AWS_SECRET_ACCESS_KEY=$(echo "$SESSION_OUTPUT" | jq -r .Credentials.SecretAccessKey)
+    export AWS_SESSION_TOKEN=$(echo "$SESSION_OUTPUT" | jq -r .Credentials.SessionToken)
+    EXPIRATION=$(echo "$SESSION_OUTPUT" | jq -r .Credentials.Expiration)
+    
+    if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_SESSION_TOKEN" ]]; then
+        print_error "Failed to get session token or extract credentials."  
+        return 1
+    fi
+    
+    # Save to aws_credentials file
+    CREDS_FILE=~/.local/bin/aws_credentials
+    mkdir -p ~/.local/bin
+    chmod 700 ~/.local/bin
+    
+    echo -e "${CYAN}Writing credentials to $CREDS_FILE...${RESET}"
+    cat > "$CREDS_FILE" << EOF
+export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
+# Expiration: $EXPIRATION
+EOF
+    chmod 600 "$CREDS_FILE"
+    
+    print_success "AWS CLI authentication successful."
+    echo -e "${WHITE}Session token expires at:${RESET} ${MAGENTA}$EXPIRATION${RESET}"
+    echo ""
+    show_load_creds_reminder
+    echo -e "${CYAN}Authentication complete. Returning to shell...${RESET}"
+    sleep 1
+}
+
+# Function for AWS Admin CLI auth
+aws_admin_cli_auth() {
+    clear
+    draw_box "AWS ADMIN CLI AUTHENTICATION"
+    echo ""
+    print_info "Authenticating for AWS Admin CLI with MFA..."
+    
+    # Clear any existing AWS credentials
+    unset AWS_ACCESS_KEY_ID
+    unset AWS_SECRET_ACCESS_KEY
+    unset AWS_SESSION_TOKEN
+    
+    # Get MFA token
+    TOKEN_CODE=$(get_mfa_token)
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi
+    
+    echo -e "${CYAN}Assuming role...${RESET}"
+    # Assume role with MFA
+    ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+        --role-arn "$ROLE_ARN" \
+        --role-session-name "$SESSION_NAME" \
+        --serial-number "$MFA_SERIAL_NUMBER" \
+        --token-code "$TOKEN_CODE" \
+        --duration-seconds "$DURATION_SECONDS" \
+        --output json)
+    
+    # Extract credentials
+    export AWS_ACCESS_KEY_ID=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.AccessKeyId)
+    export AWS_SECRET_ACCESS_KEY=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.SecretAccessKey)
+    export AWS_SESSION_TOKEN=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.SessionToken)
+    EXPIRATION=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.Expiration)
+    
+    if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_SESSION_TOKEN" ]]; then
+        print_error "Failed to assume role or extract credentials."  
+        return 1
+    fi
+    
+    # Save to aws_credentials file
+    CREDS_FILE=~/.local/bin/aws_credentials
+    mkdir -p ~/.local/bin
+    chmod 700 ~/.local/bin
+    
+    echo -e "${CYAN}Writing credentials to $CREDS_FILE...${RESET}"
+    cat > "$CREDS_FILE" << EOF
+export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
+# Expiration: $EXPIRATION
+EOF
+    chmod 600 "$CREDS_FILE"
+    
+    print_success "AWS Admin CLI authentication successful."
+    echo -e "${WHITE}Session token expires at:${RESET} ${MAGENTA}$EXPIRATION${RESET}"
+    echo ""
+    show_load_creds_reminder
+    echo -e "${CYAN}Authentication complete. Returning to shell...${RESET}"
+    sleep 1
+}
+
+# Function to elevate to admin role
+elevate_to_admin() {
+    clear
+    draw_box "ELEVATE TO ADMIN ROLE"
+    echo ""
+    print_info "Elevating to Admin Role with MFA..."
+    
+    # Get MFA token
+    TOKEN_CODE=$(get_mfa_token)
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi
+    
+    echo -e "${CYAN}Assuming role...${RESET}"
+    # Assume role with MFA
+    ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+        --role-arn "$ROLE_ARN" \
+        --role-session-name "$SESSION_NAME" \
+        --serial-number "$MFA_SERIAL_NUMBER" \
+        --token-code "$TOKEN_CODE" \
+        --duration-seconds "$DURATION_SECONDS" \
+        --output json)
+    
+    # Extract credentials
+    export AWS_ACCESS_KEY_ID=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.AccessKeyId)
+    export AWS_SECRET_ACCESS_KEY=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.SecretAccessKey)
+    export AWS_SESSION_TOKEN=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.SessionToken)
+    EXPIRATION=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.Expiration)
+    
+    if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_SESSION_TOKEN" ]]; then
+        print_error "Failed to assume role or extract credentials."  
+        return 1
+    fi
+    
+    print_success "Successfully elevated to Admin Role."
+    echo -e "${WHITE}Session token expires at:${RESET} ${MAGENTA}$EXPIRATION${RESET}"
+    echo ""
+    echo -e "${CYAN}Elevation complete. Returning to shell...${RESET}"
+    sleep 1
+}
+
+# Function for starting AWS Admin Console 
+start_aws_console() {
+    clear
+    draw_box "AWS ADMIN CONSOLE"
+    echo ""
+    
+    # Clear any existing AWS credentials
+    unset AWS_ACCESS_KEY_ID
+    unset AWS_SECRET_ACCESS_KEY
+    unset AWS_SESSION_TOKEN
+    
+    # Get MFA token
+    TOKEN_CODE=$(get_mfa_token)
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi
+    
+    # Assume role with MFA
+    echo -e "${CYAN}Assuming role...${RESET}"
+    ASSUME_ROLE_OUTPUT=$(aws sts assume-role \
+        --role-arn "$ROLE_ARN" \
+        --role-session-name "$SESSION_NAME" \
+        --serial-number "$MFA_SERIAL_NUMBER" \
+        --token-code "$TOKEN_CODE" \
+        --duration-seconds "$DURATION_SECONDS" \
+        --output json)
+    
+    # Extract Temporary Credentials
+    export AWS_ACCESS_KEY_ID=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.AccessKeyId)
+    export AWS_SECRET_ACCESS_KEY=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.SecretAccessKey)
+    export AWS_SESSION_TOKEN=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.SessionToken)
+    EXPIRATION=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r .Credentials.Expiration)
+    
+    if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_SESSION_TOKEN" ]]; then
+        print_error "Failed to assume role or extract credentials."  
+        return 1
+    fi
+    
+    # Save to aws_credentials file
+    CREDS_FILE=~/.local/bin/aws_credentials
+    mkdir -p ~/.local/bin
+    chmod 700 ~/.local/bin
+    
+    echo -e "${CYAN}Writing credentials to $CREDS_FILE...${RESET}"
+    cat > "$CREDS_FILE" << EOF
+export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN
+# Expiration: $EXPIRATION
+EOF
+    chmod 600 "$CREDS_FILE"
+    
+    # Create JSON for federation
+    CREDS_JSON=~/aws_creds.json
+    cat > "$CREDS_JSON" << EOF
+{
+  "sessionId": "$AWS_ACCESS_KEY_ID",
+  "sessionKey": "$AWS_SECRET_ACCESS_KEY",
+  "sessionToken": "$AWS_SESSION_TOKEN"
+}
+EOF
+    chmod 600 "$CREDS_JSON"
+    
+    # Generate federation URL
+    echo -e "${CYAN}Generating AWS federation console URL...${RESET}"
+    
+    # Combine and encode session JSON properly
+    SESSION_JSON=$(jq -n \
+      --arg sessionId "$AWS_ACCESS_KEY_ID" \
+      --arg sessionKey "$AWS_SECRET_ACCESS_KEY" \
+      --arg sessionToken "$AWS_SESSION_TOKEN" \
+      '{sessionId: $sessionId, sessionKey: $sessionKey, sessionToken: $sessionToken}' | jq -sRr @uri)
+    
+    # Get the SigninToken using the properly encoded session
+    SIGNIN_TOKEN=$(curl -s "https://signin.aws.amazon.com/federation?Action=getSigninToken&Session=$SESSION_JSON" | jq -r .SigninToken)
+    
+    DESTINATION_URL="https%3A%2F%2Fconsole.aws.amazon.com%2F"
+    FEDERATION_URL="https://signin.aws.amazon.com/federation?Action=login&Issuer=&Destination=$DESTINATION_URL&SigninToken=$SIGNIN_TOKEN"
+    
+    echo ""
+    print_success "Your AWS federation console URL is ready!"
+    echo -e "${MAGENTA}$FEDERATION_URL${RESET}"
+    echo ""
+    
+    
+    echo -e "${CYAN}Would you like to open the URL in your browser? (y/n)${RESET}"
+    echo -e "${YELLOW}Enter your choice: ${RESET}"
+    read open_choice
+    
+    if [[ "$open_choice" == "y" || "$open_choice" == "Y" ]]; then
+        echo -e "${GREEN}Opening URL in browser...${RESET}"
+        open "$FEDERATION_URL"
+    fi
+    
+    # Print token expiration
+    echo -e "${WHITE}Session token expires at:${RESET} ${MAGENTA}$EXPIRATION${RESET}"
+    echo ""
+    echo -e "${CYAN}Console setup complete. Returning to shell...${RESET}"
+    sleep 1
+}
+
+# Function to show current token info
+show_token_info() {
+    clear
+    draw_box "AWS TOKEN INFORMATION"
+    echo ""
+    
+    # Check if we have AWS credentials set
+    if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_SESSION_TOKEN" ]]; then
+        print_error "No active AWS credentials found in this session."
+        echo -e "${YELLOW}Run one of the authentication options to obtain credentials.${RESET}"
+        echo ""
+        echo -e "${CYAN}Returning to shell...${RESET}"
+        sleep 1
+        return 0
+    fi
+    
+    # Try to verify the credentials by getting the caller identity
+    echo -e "${CYAN}Verifying credentials...${RESET}"
+    CALLER_INFO=$(aws sts get-caller-identity --output json 2>/dev/null)
+    
+    if [[ $? -ne 0 ]]; then
+        print_error "Your AWS credentials appear to be expired or invalid."
+        echo ""
+        echo -e "${CYAN}Returning to shell...${RESET}"
+        sleep 1
+        return 0
+    fi
+    
+    # Get information about the caller
+    ACCOUNT_ID=$(echo "$CALLER_INFO" | jq -r .Account)
+    USER_ID=$(echo "$CALLER_INFO" | jq -r .UserId)
+    ARN=$(echo "$CALLER_INFO" | jq -r .Arn)
+    
+    print_success "You have valid AWS credentials"
+    echo ""
+    echo -e "${WHITE}Account ID:${RESET} ${MAGENTA}$ACCOUNT_ID${RESET}"
+    echo -e "${WHITE}User ID:${RESET} ${MAGENTA}$USER_ID${RESET}"
+    echo -e "${WHITE}ARN:${RESET} ${MAGENTA}$ARN${RESET}"
+    echo ""
+    
+    # Check if we're using a role (assumed role)
+    if [[ "$ARN" == *"assumed-role"* ]]; then
+        ROLE_NAME=$(echo "$ARN" | sed -n 's/.*assumed-role\/\([^/]*\)\/.*/\1/p')
+        echo -e "${GREEN}Currently assumed role: ${BOLD}$ROLE_NAME${RESET}"
+    else
+        echo -e "${YELLOW}Not using an assumed role${RESET}"
+    fi
+    
+    echo ""
+    
+    # Try to get session expiration if credentials file exists
+    CREDS_FILE=~/.local/bin/aws_credentials
+    if [[ -f "$CREDS_FILE" ]]; then
+        # Extract expiration time if available
+        EXPIRATION=$(grep -o "# Expiration: [0-9:-]*T[0-9:-]*Z" "$CREDS_FILE" | sed 's/# Expiration: //')
+        
+        if [[ ! -z "$EXPIRATION" ]]; then
+            # Convert to epoch time for both expiration and current time
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                # macOS date command
+                EXPIRATION_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$EXPIRATION" +%s)
+                CURRENT_EPOCH=$(date +%s)
+            else
+                # Linux date command
+                EXPIRATION_EPOCH=$(date -d "$EXPIRATION" +%s)
+                CURRENT_EPOCH=$(date +%s)
+            fi
+            
+            # Calculate time remaining
+            TIME_REMAINING=$((EXPIRATION_EPOCH - CURRENT_EPOCH))
+            
+            if [[ $TIME_REMAINING -gt 0 ]]; then
+                MINUTES=$((TIME_REMAINING / 60))
+                SECONDS=$((TIME_REMAINING % 60))
+                echo -e "${WHITE}Session expires in:${RESET} ${GREEN}${MINUTES}m ${SECONDS}s${RESET}"
+                echo -e "${WHITE}Expiration time:${RESET} ${MAGENTA}$EXPIRATION${RESET}"
+                echo ""
+                show_load_creds_reminder
+            else
+                print_error "Session has expired at: $EXPIRATION"
+            fi
+        else
+            print_info "Session expiration information not available"
+        fi
+    else
+        print_info "Session expiration information not available"
+    fi
+    
+    echo ""
+    echo -e "${CYAN}Token information displayed. Returning to shell...${RESET}"
+    sleep 1
+}
+
+# Function to display help information
+display_help() {
+    clear
+    draw_box "AWS AUTHENTICATION MENU HELP"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}This script provides multiple AWS authentication methods:${RESET}"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}1. AWS CLI Auth (MFA)${RESET}"
+    echo -e "   ${CYAN}•${RESET} Standard AWS CLI authentication with MFA"
+    echo -e "   ${CYAN}•${RESET} Sets environment variables for AWS CLI use"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}2. AWS Admin CLI Auth (MFA + Admin Role)${RESET}"
+    echo -e "   ${CYAN}•${RESET} AWS CLI authentication with Admin Role assumption"
+    echo -e "   ${CYAN}•${RESET} Provides elevated privileges for AWS CLI commands"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}3. Elevate to Admin Role${RESET}"
+    echo -e "   ${CYAN}•${RESET} Assumes the Admin Role for the current session"
+    echo -e "   ${CYAN}•${RESET} Sets environment variables with Admin Role credentials"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}4. Start AWS Admin Console${RESET}"
+    echo -e "   ${CYAN}•${RESET} Generates a federated login URL for AWS Management Console"
+    echo -e "   ${CYAN}•${RESET} Opens the console in your browser with Admin privileges"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}5. Show Token Info${RESET}"
+    echo -e "   ${CYAN}•${RESET} Displays information about your current AWS credentials"
+    echo -e "   ${CYAN}•${RESET} Shows if you have a valid token, time to expiration, and assumed role"
+    echo ""
+    
+    echo -e "${BOLD}${WHITE}Configuration file:${RESET} ${MAGENTA}$CONFIG_FILE${RESET}"
+    echo -e "${YELLOW}Contains AWS account settings, role names, and authentication parameters${RESET}"
+    echo ""
+    
+    echo -e "${CYAN}Help information displayed. Returning to shell...${RESET}"
+    sleep 1
+}
+
+# Function to setup zshrc alias if missing
+setup_zshrc_alias() {
+    local ZSHRC="$HOME/.zshrc"
+    local ALIAS_LINE='alias aws-load-creds="source ~/.local/bin/aws_credentials"'
+    
+    if [[ -f "$ZSHRC" ]] && ! grep -q "aws-load-creds" "$ZSHRC"; then
+        echo -e "\n# AWS credentials helper\n$ALIAS_LINE" >> "$ZSHRC"
+        print_info "Added AWS credentials alias to ~/.zshrc"
+        print_info "To use in other shells, either:"
+        print_info "1. Restart your terminal, or"
+        print_info "2. Run: source ~/.zshrc"
+        print_info "Then you can use 'aws-load-creds' to load credentials in any shell"
+        echo ""
+        sleep 2
+    fi
+}
+
+# Main menu
+show_main_menu() {
+    clear
+    tput civis # Hide cursor
+    
+    draw_box "AWS AUTHENTICATION MENU"
+    echo ""
+    echo -e "${BOLD}${WHITE}Select an option:${RESET}"
+    echo ""
+    echo -e "${CYAN}1.${RESET} ${WHITE}AWS CLI Auth (MFA)${RESET}"
+    echo -e "${CYAN}2.${RESET} ${WHITE}AWS Admin CLI Auth (MFA + Admin Role)${RESET}"
+    echo -e "${CYAN}3.${RESET} ${WHITE}Elevate to Admin Role${RESET}"
+    echo -e "${CYAN}4.${RESET} ${WHITE}Start AWS Admin Console${RESET}"
+    echo -e "${CYAN}5.${RESET} ${WHITE}Show Token Info${RESET}"
+    echo -e "${CYAN}6.${RESET} ${WHITE}Help${RESET}"
+    echo -e "${CYAN}7.${RESET} ${WHITE}Exit${RESET}"
+    echo ""
+    echo -e "${CYAN}${BOX_TL}$(printf "%0.s${BOX_H}" $(seq 1 60))${BOX_TR}${RESET}"
+    echo -e "${YELLOW}Select option (1-7): ${RESET}"
+    read main_option
+    
+    case $main_option in
+        1)
+            aws_cli_auth
+            show_main_menu
+            ;;
+        2)
+            aws_admin_cli_auth
+            show_main_menu
+            ;;
+        3)
+            elevate_to_admin
+            show_main_menu
+            ;;
+        4)
+            start_aws_console
+            show_main_menu
+            ;;
+        5)
+            show_token_info
+            show_main_menu
+            ;;
+        6)
+            display_help
+            show_main_menu
+            ;;
+        7)
+            echo -e "${YELLOW}Exiting...${RESET}"
+            ;;
+        *)
+            print_error "Invalid option. Please try again."
+            sleep 2
+            show_main_menu
+            ;;
+    esac
+}
+
+# Initial setup
+clear
+tput civis # Hide cursor
+
+# Setup zshrc alias if needed
+setup_zshrc_alias
+
+# Run the main menu
+show_main_menu
+
+# Make sure terminal is restored even if the script exits abruptly
+cleanup_terminal

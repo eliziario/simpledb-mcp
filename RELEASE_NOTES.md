@@ -1,5 +1,61 @@
 # Release Notes
 
+## v0.3.0 - AWS Glue Integration
+
+### 🚀 New Features
+
+**AWS Glue Data Catalog Support**
+- Full integration with AWS Glue Data Catalog for metadata access
+- Support for listing databases, tables, and schema information
+- Athena integration for actual data sampling from tables
+- Compatible with existing AWS infrastructure and security policies
+
+**Flexible MFA Authentication**
+- **Native macOS Dialog** (default): Clean, user-friendly dialog for manual MFA code entry
+- **Automated gauth Integration**: Power-user option using existing gauth tools
+- Configurable per-connection via `use_gauth` parameter
+- Follows established aws_mfa script authentication patterns
+
+**Enterprise-Grade Security**
+- STS assume-role with MFA authentication
+- Auto-refreshing credentials (refreshes 1 minute before expiry)
+- Secure credential caching and session management
+- Integration with existing IAM roles and policies
+
+### 🔧 Technical Implementation
+
+**AWS Integration Architecture**
+- Uses AWS SDK Go with proper STS credential provider
+- Background credential refresh with thread-safe caching
+- Athena query execution with configurable timeouts
+- S3 integration for Athena result storage
+
+**Configuration System**
+- Extended connection config to support AWS-specific parameters
+- Support for role ARN, MFA serial, and authentication preferences
+- Environment variable integration for Athena S3 output location
+
+**MCP Tool Compatibility**
+- All existing MCP tools work seamlessly with Glue connections
+- Proper error handling and timeout management
+- JSON response formatting consistent with other database types
+
+### 📚 Documentation
+
+- Comprehensive AWS Glue setup guide in README
+- Clear configuration examples for both MFA authentication methods
+- Required IAM permissions documentation
+- Environment variable setup instructions
+
+### 🛠️ Developer Experience
+
+- Clean separation between authentication methods
+- Platform-specific implementations (macOS-optimized dialogs)
+- Proper error messages and validation
+- Consistent with existing codebase patterns
+
+---
+
 ## v0.2.0 - Salesforce Integration
 
 ### 🚀 New Features
