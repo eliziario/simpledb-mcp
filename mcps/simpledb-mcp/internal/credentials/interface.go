@@ -7,4 +7,7 @@ type CredentialManager interface {
 	Delete(connectionName, username string) error
 	ClearCache()
 	TestConnection(connectionName, username string) error
+	// Salesforce-specific methods
+	StoreSalesforce(connectionName, username, password, securityToken string) error
+	GetSalesforce(connectionName string) (*SalesforceCredential, error)
 }

@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server for securely accessing and exploring relat
 
 ## Features
 
-- **Database Support**: MySQL and PostgreSQL with connection pooling
+- **Database Support**: MySQL, PostgreSQL, and Salesforce with connection pooling
 - **Secure Credentials**: Cross-platform keychain/credential manager integration
 - **Biometric Auth**: TouchID/FaceID on macOS, Windows Hello on Windows
 - **Connection Keep-Alive**: Background monitoring keeps database connections healthy
@@ -120,6 +120,11 @@ connections:
     database: analytics
     ssl_mode: require
     username: readonly
+  
+  my-salesforce:
+    type: salesforce
+    host: https://mycompany.my.salesforce.com
+    # Credentials stored separately in keychain
 
 settings:
   query_timeout: 30s      # Query timeout
@@ -135,6 +140,34 @@ settings:
     max_error_count: 3          # Maximum consecutive errors before closing connection
     reconnect_delay: 5s         # Delay before attempting to reconnect after error
 ```
+
+## Salesforce Integration
+
+SimpleDB MCP provides secure access to Salesforce objects through SOQL queries:
+
+### Salesforce Setup
+
+1. **Store Salesforce credentials**:
+   ```bash
+   go run store_sf_creds.go my-salesforce https://mycompany.my.salesforce.com user@company.com password security_token
+   ```
+
+2. **Get your Security Token**:
+   - Log into Salesforce → Settings → My Personal Information → Reset My Security Token
+   - The token will be emailed to you
+
+3. **Salesforce Tools**:
+   - `list_tables` - Lists all queryable Salesforce objects (standard and custom)
+   - `describe_table` - Shows object fields, types, and metadata
+   - `get_table_sample` - Retrieves sample records using SOQL
+   - `list_databases`/`list_schemas` - Return placeholder values for MCP client compatibility
+
+### Salesforce Features
+
+- **Read-Only Access**: Uses SOQL SELECT queries only
+- **Field Filtering**: Automatically limits to 20 most relevant fields for performance
+- **Type Mapping**: Converts Salesforce field types to standard SQL equivalents
+- **Error Handling**: Graceful handling of complex field types (address, location)
 
 ## Security
 

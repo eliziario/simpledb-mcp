@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"strings"
@@ -31,6 +32,12 @@ type Credential struct {
 	Password string
 }
 
+type SalesforceCredential struct {
+	Username      string
+	Password      string
+	SecurityToken string
+}
+
 func NewManager(cacheTime time.Duration) *Manager {
 	return &Manager{
 		cache:     make(map[string]cachedCredential),
@@ -54,6 +61,51 @@ func (m *Manager) Store(connectionName, username, password string) error {
 	m.cacheMutex.Unlock()
 
 	return nil
+}
+
+func (m *Manager) StoreSalesforce(connectionName, username, password, securityToken string) error {
+	// Store Salesforce credentials as JSON in keychain
+	sfCred := SalesforceCredential{
+		Username:      username,
+		Password:      password,
+		SecurityToken: securityToken,
+	}
+	
+	credJSON, err := json.Marshal(sfCred)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Salesforce credentials: %w", err)
+	}
+	
+	key := fmt.Sprintf("%s:salesforce", connectionName)
+	if err := keyring.Set(ServiceName, key, string(credJSON)); err != nil {
+		return fmt.Errorf("failed to store Salesforce credential in keychain: %w", err)
+	}
+
+	return nil
+}
+
+func (m *Manager) GetSalesforce(connectionName string) (*SalesforceCredential, error) {
+	key := fmt.Sprintf("%s:salesforce", connectionName)
+	
+	// Get from keychain with biometric prompt if supported
+	credJSON, err := m.getWithBiometric(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve Salesforce credential: %w", err)
+	}
+
+	// Decode password if it's base64-encoded by go-keyring
+	decodedJSON, err := m.decodePassword(credJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Salesforce credential: %w", err)
+	}
+
+	// Parse JSON credential
+	var sfCred SalesforceCredential
+	if err := json.Unmarshal([]byte(decodedJSON), &sfCred); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Salesforce credential: %w", err)
+	}
+
+	return &sfCred, nil
 }
 
 func (m *Manager) Get(connectionName, username string) (*Credential, error) {
