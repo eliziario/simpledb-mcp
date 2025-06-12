@@ -1,20 +1,49 @@
 package database
 
 import (
-	"database/sql"
-	"fmt"
-
-	"github.com/eliziario/simpledb-mcp/internal/config"
-	"github.com/eliziario/simpledb-mcp/internal/credentials"
-	
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
+   "database/sql"
+   "fmt"
+   
+   "github.com/aws/aws-sdk-go/aws"
+   awscredentials "github.com/aws/aws-sdk-go/aws/credentials"
+   "github.com/aws/aws-sdk-go/aws/session"
+   "github.com/eliziario/simpledb-mcp/internal/config"
+   "github.com/eliziario/simpledb-mcp/internal/credentials"
+   "github.com/eliziario/simpledb-mcp/internal/awscreds"
+   _ "github.com/go-sql-driver/mysql"
+   _ "github.com/lib/pq"
 )
 
 type Manager struct {
-	pool        *ConnectionPool
-	config      *config.Config
-	credManager credentials.CredentialManager
+   pool          *ConnectionPool
+   config        *config.Config
+   credManager   credentials.CredentialManager
+   // STS providers per-connection for AWS Glue
+   awsProviders  map[string]*awscreds.STSProvider
+}
+
+// glueSession returns an AWS session for the Glue connection, refreshing STS credentials via MFA.
+func (m *Manager) glueSession(connectionName string) (*session.Session, error) {
+   connCfg, exists := m.config.GetConnection(connectionName)
+   if !exists {
+       return nil, fmt.Errorf("connection '%s' not found", connectionName)
+   }
+   if m.awsProviders == nil {
+       m.awsProviders = make(map[string]*awscreds.STSProvider)
+   }
+   prov, ok := m.awsProviders[connectionName]
+   if !ok {
+       prov = awscreds.NewSTSProvider(connCfg.RoleArn, connCfg.MFASerial, 3600, connCfg.UseGauth)
+       m.awsProviders[connectionName] = prov
+   }
+   creds, err := prov.Creds()
+   if err != nil {
+       return nil, fmt.Errorf("get STS creds: %w", err)
+   }
+   return session.NewSession(&aws.Config{
+       Region:      aws.String(connCfg.Host),
+       Credentials: awscredentials.NewStaticCredentials(creds.AccessKeyID, creds.SecretAccessKey, creds.SessionToken),
+   })
 }
 
 type TableInfo struct {
@@ -124,6 +153,12 @@ func (m *Manager) Close() error {
 }
 
 func (m *Manager) TestConnection(connectionName string) error {
+	// For AWS Glue connections, verify via AWS Catalog
+	if connCfg, exists := m.config.GetConnection(connectionName); exists && connCfg.Type == "glue" {
+		_, err := m.ListDatabasesGlue(connectionName)
+		return err
+	}
+	// Default: SQL ping
 	db, err := m.GetConnection(connectionName)
 	if err != nil {
 		return err

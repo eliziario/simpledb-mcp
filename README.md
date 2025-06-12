@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server for securely accessing and exploring relat
 
 ## Features
 
-- **Database Support**: MySQL, PostgreSQL, and Salesforce with connection pooling
+- **Database Support**: MySQL, PostgreSQL, Salesforce, and AWS Glue with connection pooling
 - **Secure Credentials**: Cross-platform keychain/credential manager integration
 - **Biometric Auth**: TouchID/FaceID on macOS, Windows Hello on Windows
 - **Connection Keep-Alive**: Background monitoring keeps database connections healthy
@@ -125,6 +125,12 @@ connections:
     type: salesforce
     host: https://mycompany.my.salesforce.com
     # Credentials stored separately in keychain
+  
+  my-glue:
+    type: glue
+    host: us-east-1  # AWS region
+    role_arn: arn:aws:iam::123456789012:role/AdminRole
+    mfa_serial: arn:aws:iam::123456789012:mfa/your.username
 
 settings:
   query_timeout: 30s      # Query timeout
@@ -168,6 +174,52 @@ SimpleDB MCP provides secure access to Salesforce objects through SOQL queries:
 - **Field Filtering**: Automatically limits to 20 most relevant fields for performance
 - **Type Mapping**: Converts Salesforce field types to standard SQL equivalents
 - **Error Handling**: Graceful handling of complex field types (address, location)
+
+## AWS Glue Integration
+
+SimpleDB MCP provides secure access to AWS Glue Data Catalog and Athena for table sampling:
+
+### AWS Glue Setup
+
+1. **Configure AWS MFA authentication** (choose one option):
+   
+   **Option A: Native macOS Dialog (Recommended)**
+   - Set `use_gauth: false` or omit this field in your connection config
+   - Enter MFA codes manually from your authenticator app via native dialog
+   
+   **Option B: Automated with gauth**
+   - Set `use_gauth: true` in your connection config
+   - Ensure you have the aws_mfa script configured in `~/.config/.aws_menu.ini`
+   - Install and configure gauth for automated MFA token generation
+   
+   - Your IAM user must have permission to assume the specified role
+
+2. **Required AWS Permissions**:
+   - `glue:GetDatabases`, `glue:GetTables`, `glue:GetTable` for catalog access
+   - `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults` for sampling
+   - `s3:GetBucketLocation`, `s3:GetObject`, `s3:ListBucket`, `s3:PutObject` for Athena results
+
+3. **Environment Variables**:
+   ```bash
+   export AWS_ATHENA_S3_OUTPUT="s3://your-athena-results-bucket/results/"
+   ```
+
+4. **AWS Glue Tools**:
+   - `list_databases` - Lists all Glue Catalog databases
+   - `list_tables` - Lists tables in a Glue database  
+   - `describe_table` - Shows table schema from Glue Catalog
+   - `get_table_sample` - Executes Athena queries to sample table data
+   - `list_schemas` - Returns database name (Glue uses database-level organization)
+
+### AWS Glue Features
+
+- **Flexible MFA Authentication**: 
+  - Native macOS dialog for manual MFA code entry (default)
+  - Automated gauth integration for power users
+- **Auto-refresh**: STS credentials automatically refresh when expired
+- **Athena Integration**: Table sampling uses Athena for actual data queries
+- **Pagination**: Handles large numbers of databases/tables efficiently
+- **Timeout Protection**: Configurable query timeouts prevent long-running queries
 
 ## Security
 

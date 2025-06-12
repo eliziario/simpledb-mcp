@@ -18,6 +18,16 @@ connections:
     type: salesforce
     host: https://mycompany.my.salesforce.com  # Your Salesforce instance URL
     # Credentials (username, password, security_token) stored separately in keychain
+  
+  aws-glue:
+    type: glue
+    host: us-east-1  # AWS region
+    role_arn: arn:aws:iam::123456789012:role/AdminRole  # IAM role ARN for assume-role
+    mfa_serial: arn:aws:iam::123456789012:mfa/your.username  # MFA device ARN
+    use_gauth: true  # Use gauth tool (true) or native macOS dialog (false/omitted)
+    # When use_gauth: true, uses ~/.config/.aws_menu.ini config and gauth tool
+    # When use_gauth: false (or omitted), shows native macOS dialog for MFA input
+    # Requires AWS_ATHENA_S3_OUTPUT environment variable for table sampling
 
 settings:
   query_timeout: 30s

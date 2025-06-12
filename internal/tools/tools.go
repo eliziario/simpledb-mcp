@@ -161,16 +161,18 @@ func (h *Handler) listDatabases(args ListDatabasesArgs) (*mcp_golang.ToolRespons
 	var databases []string
 	var err error
 
-	switch conn.Type {
-	case "mysql":
-		databases, err = h.dbManager.ListDatabasesMySQL(args.Connection)
-	case "postgres":
-		databases, err = h.dbManager.ListDatabasesPostgres(args.Connection)
-	case "salesforce":
-		databases, err = h.dbManager.ListDatabasesSalesforce(args.Connection)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
-	}
+   switch conn.Type {
+   case "mysql":
+       databases, err = h.dbManager.ListDatabasesMySQL(args.Connection)
+   case "postgres":
+       databases, err = h.dbManager.ListDatabasesPostgres(args.Connection)
+   case "salesforce":
+       databases, err = h.dbManager.ListDatabasesSalesforce(args.Connection)
+   case "glue":
+       databases, err = h.dbManager.ListDatabasesGlue(args.Connection)
+   default:
+       return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
+   }
 
 	if err != nil {
 		return nil, err
@@ -189,32 +191,42 @@ func (h *Handler) listSchemas(args ListSchemasArgs) (*mcp_golang.ToolResponse, e
 		return nil, fmt.Errorf("connection '%s' not found", args.Connection)
 	}
 
-	switch conn.Type {
-	case "postgres":
-		schemas, err := h.dbManager.ListSchemasPostgres(args.Connection, args.Database)
-		if err != nil {
-			return nil, err
-		}
-		content, err := newJSONContent(schemas)
-		if err != nil {
-			return nil, err
-		}
-		return mcp_golang.NewToolResponse(content), nil
-	case "mysql":
-		return nil, fmt.Errorf("MySQL does not support schemas - use list_databases instead")
-	case "salesforce":
-		schemas, err := h.dbManager.ListSchemasSalesforce(args.Connection, args.Database)
-		if err != nil {
-			return nil, err
-		}
-		content, err := newJSONContent(schemas)
-		if err != nil {
-			return nil, err
-		}
-		return mcp_golang.NewToolResponse(content), nil
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
-	}
+   switch conn.Type {
+   case "postgres":
+       schemas, err := h.dbManager.ListSchemasPostgres(args.Connection, args.Database)
+       if err != nil {
+           return nil, err
+       }
+       content, err := newJSONContent(schemas)
+       if err != nil {
+           return nil, err
+       }
+       return mcp_golang.NewToolResponse(content), nil
+   case "mysql":
+       return nil, fmt.Errorf("MySQL does not support schemas - use list_databases instead")
+   case "salesforce":
+       schemas, err := h.dbManager.ListSchemasSalesforce(args.Connection, args.Database)
+       if err != nil {
+           return nil, err
+       }
+       content, err := newJSONContent(schemas)
+       if err != nil {
+           return nil, err
+       }
+       return mcp_golang.NewToolResponse(content), nil
+   case "glue":
+       schemas, err := h.dbManager.ListSchemasGlue(args.Connection, args.Database)
+       if err != nil {
+           return nil, err
+       }
+       content, err := newJSONContent(schemas)
+       if err != nil {
+           return nil, err
+       }
+       return mcp_golang.NewToolResponse(content), nil
+   default:
+       return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
+   }
 }
 
 func (h *Handler) listTables(args ListTablesArgs) (*mcp_golang.ToolResponse, error) {
@@ -226,17 +238,18 @@ func (h *Handler) listTables(args ListTablesArgs) (*mcp_golang.ToolResponse, err
 	var tables []database.TableInfo
 	var err error
 
-	switch conn.Type {
-	case "mysql":
-		tables, err = h.dbManager.ListTablesMySQL(args.Connection, args.Database)
-	case "postgres":
-		tables, err = h.dbManager.ListTablesPostgres(args.Connection, args.Database, args.Schema)
-	case "salesforce":
-		// For Salesforce, ignore database and schema parameters
-		tables, err = h.dbManager.ListTablesSalesforce(args.Connection)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
-	}
+   switch conn.Type {
+   case "mysql":
+       tables, err = h.dbManager.ListTablesMySQL(args.Connection, args.Database)
+   case "postgres":
+       tables, err = h.dbManager.ListTablesPostgres(args.Connection, args.Database, args.Schema)
+   case "salesforce":
+       tables, err = h.dbManager.ListTablesSalesforce(args.Connection)
+   case "glue":
+       tables, err = h.dbManager.ListTablesGlue(args.Connection, args.Database, args.Schema)
+   default:
+       return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
+   }
 
 	if err != nil {
 		return nil, err
@@ -258,17 +271,18 @@ func (h *Handler) describeTable(args DescribeTableArgs) (*mcp_golang.ToolRespons
 	var columns []database.ColumnInfo
 	var err error
 
-	switch conn.Type {
-	case "mysql":
-		columns, err = h.dbManager.DescribeTableMySQL(args.Connection, args.Database, args.Table)
-	case "postgres":
-		columns, err = h.dbManager.DescribeTablePostgres(args.Connection, args.Database, args.Table, args.Schema)
-	case "salesforce":
-		// For Salesforce, ignore database and schema parameters, use table as object name
-		columns, err = h.dbManager.DescribeTableSalesforce(args.Connection, args.Table)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
-	}
+   switch conn.Type {
+   case "mysql":
+       columns, err = h.dbManager.DescribeTableMySQL(args.Connection, args.Database, args.Table)
+   case "postgres":
+       columns, err = h.dbManager.DescribeTablePostgres(args.Connection, args.Database, args.Table, args.Schema)
+   case "salesforce":
+       columns, err = h.dbManager.DescribeTableSalesforce(args.Connection, args.Table)
+   case "glue":
+       columns, err = h.dbManager.DescribeTableGlue(args.Connection, args.Database, args.Table, args.Schema)
+   default:
+       return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
+   }
 
 	if err != nil {
 		return nil, err
@@ -290,17 +304,18 @@ func (h *Handler) listIndexes(args ListIndexesArgs) (*mcp_golang.ToolResponse, e
 	var indexes []database.IndexInfo
 	var err error
 
-	switch conn.Type {
-	case "mysql":
-		indexes, err = h.dbManager.ListIndexesMySQL(args.Connection, args.Database, args.Table)
-	case "postgres":
-		indexes, err = h.dbManager.ListIndexesPostgres(args.Connection, args.Database, args.Table, args.Schema)
-	case "salesforce":
-		// For Salesforce, ignore database and schema parameters, use table as object name
-		indexes, err = h.dbManager.ListIndexesSalesforce(args.Connection, args.Table)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
-	}
+   switch conn.Type {
+   case "mysql":
+       indexes, err = h.dbManager.ListIndexesMySQL(args.Connection, args.Database, args.Table)
+   case "postgres":
+       indexes, err = h.dbManager.ListIndexesPostgres(args.Connection, args.Database, args.Table, args.Schema)
+   case "salesforce":
+       indexes, err = h.dbManager.ListIndexesSalesforce(args.Connection, args.Table)
+   case "glue":
+       indexes, err = h.dbManager.ListIndexesGlue(args.Connection, args.Database, args.Table)
+   default:
+       return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
+   }
 
 	if err != nil {
 		return nil, err
@@ -335,17 +350,18 @@ func (h *Handler) getTableSample(args GetTableSampleArgs) (*mcp_golang.ToolRespo
 	var sample map[string]interface{}
 	var err error
 
-	switch conn.Type {
-	case "mysql":
-		sample, err = h.dbManager.GetTableSampleMySQL(args.Connection, args.Database, args.Table, limit)
-	case "postgres":
-		sample, err = h.dbManager.GetTableSamplePostgres(args.Connection, args.Database, args.Table, args.Schema, limit)
-	case "salesforce":
-		// For Salesforce, ignore database and schema parameters, use table as object name
-		sample, err = h.dbManager.GetTableSampleSalesforce(args.Connection, args.Table, limit)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
-	}
+   switch conn.Type {
+   case "mysql":
+       sample, err = h.dbManager.GetTableSampleMySQL(args.Connection, args.Database, args.Table, limit)
+   case "postgres":
+       sample, err = h.dbManager.GetTableSamplePostgres(args.Connection, args.Database, args.Table, args.Schema, limit)
+   case "salesforce":
+       sample, err = h.dbManager.GetTableSampleSalesforce(args.Connection, args.Table, limit)
+   case "glue":
+       sample, err = h.dbManager.GetTableSampleGlue(args.Connection, args.Database, args.Table, limit)
+   default:
+       return nil, fmt.Errorf("unsupported database type: %s", conn.Type)
+   }
 
 	if err != nil {
 		return nil, err
