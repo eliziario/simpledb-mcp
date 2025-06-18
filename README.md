@@ -9,7 +9,7 @@ A Model Context Protocol (MCP) server for securely accessing and exploring relat
 - **Biometric Auth**: TouchID/FaceID on macOS, Windows Hello on Windows
 - **Connection Keep-Alive**: Background monitoring keeps database connections healthy
 - **Read-Only Operations**: Safe database exploration without modification risks
-- **MCP Compatible**: Works with Cursor, Claude CLI, and other MCP clients
+- **MCP Compatible**: Works with Claude Desktop, Cursor, Claude CLI, and other MCP clients
 
 ## Supported Tools
 
@@ -94,6 +94,25 @@ Add to your Cursor MCP configuration:
 }
 ```
 
+### With Desktop Applications
+
+SimpleDB MCP includes a stdio-to-HTTP proxy for desktop application compatibility while keeping the advantages of a long-running HTTP server.
+
+Add to your desktop application configuration:
+
+```json
+{
+  "mcpServers": {
+    "simpledb": {
+      "command": "simpledb-mcp-proxy",
+      "args": ["--server", "http://localhost:48384/mcp"]
+    }
+  }
+}
+```
+
+The proxy automatically forwards stdio requests from desktop applications to your running SimpleDB MCP HTTP server. See [Desktop Integration Guide](docs/claude-integration.md) for detailed setup instructions.
+
 ### With Claude CLI
 
 Register as an MCP provider:
@@ -131,6 +150,7 @@ connections:
     host: us-east-1  # AWS region
     role_arn: arn:aws:iam::123456789012:role/AdminRole
     mfa_serial: arn:aws:iam::123456789012:mfa/your.username
+    athena_s3_output: s3://your-athena-results-bucket/results/
 
 settings:
   query_timeout: 30s      # Query timeout
@@ -199,7 +219,15 @@ SimpleDB MCP provides secure access to AWS Glue Data Catalog and Athena for tabl
    - `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults` for sampling
    - `s3:GetBucketLocation`, `s3:GetObject`, `s3:ListBucket`, `s3:PutObject` for Athena results
 
-3. **Environment Variables**:
+3. **Athena S3 Output Configuration**:
+   Set the S3 location for Athena query results in your connection config:
+   ```yaml
+   my-glue:
+     type: glue
+     athena_s3_output: s3://your-athena-results-bucket/results/
+   ```
+   
+   Alternatively, you can use the environment variable:
    ```bash
    export AWS_ATHENA_S3_OUTPUT="s3://your-athena-results-bucket/results/"
    ```

@@ -109,11 +109,22 @@ func (m *Manager) GetTableSampleGlue(connectionName, database, tableName string,
    if err != nil {
        return nil, err
    }
-   ath := athena.New(sess)
-   outLoc := os.Getenv("AWS_ATHENA_S3_OUTPUT")
-   if outLoc == "" {
-       return nil, fmt.Errorf("AWS_ATHENA_S3_OUTPUT must be set for Athena results")
+   
+   // Get Athena S3 output location from config, fallback to environment variable
+   conn, exists := m.config.GetConnection(connectionName)
+   if !exists {
+       return nil, fmt.Errorf("connection %s not found", connectionName)
    }
+   
+   outLoc := conn.AthenaS3Output
+   if outLoc == "" {
+       outLoc = os.Getenv("AWS_ATHENA_S3_OUTPUT")
+   }
+   if outLoc == "" {
+       return nil, fmt.Errorf("athena_s3_output must be set in connection config or AWS_ATHENA_S3_OUTPUT environment variable for Athena results")
+   }
+   
+   ath := athena.New(sess)
    query := fmt.Sprintf("SELECT * FROM \"%s\".\"%s\" LIMIT %d", database, tableName, limit)
    si, err := ath.StartQueryExecution(&athena.StartQueryExecutionInput{
        QueryString: aws.String(query),

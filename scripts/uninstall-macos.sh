@@ -107,6 +107,18 @@ remove_binaries() {
     else
         log_warning "CLI binary not found at $INSTALL_DIR/simpledb-cli"
     fi
+    
+    # Remove proxy binary
+    if [[ -f "$INSTALL_DIR/simpledb-mcp-proxy" ]]; then
+        if [[ ! -w "$INSTALL_DIR" ]]; then
+            sudo rm "$INSTALL_DIR/simpledb-mcp-proxy"
+        else
+            rm "$INSTALL_DIR/simpledb-mcp-proxy"
+        fi
+        log_success "Proxy binary removed"
+    else
+        log_warning "Proxy binary not found at $INSTALL_DIR/simpledb-mcp-proxy"
+    fi
 }
 
 cleanup_empty_dirs() {

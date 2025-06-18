@@ -368,7 +368,10 @@ func (h *Handler) getTableSample(args GetTableSampleArgs) (*mcp_golang.ToolRespo
 	}
 
 	// Return array of dictionaries for better readability
-	rows := sample["rows"].([]map[string]interface{})
+	rows, ok := sample["rows"].([]map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid sample data format: expected rows array")
+	}
 	
 	content, err := newJSONContent(rows)
 	if err != nil {

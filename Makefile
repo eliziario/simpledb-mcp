@@ -11,19 +11,20 @@ GOMOD=$(GOCMD) mod
 # Binary names
 BINARY_NAME=simpledb-mcp
 CLI_BINARY_NAME=simpledb-cli
+PROXY_BINARY_NAME=simpledb-mcp-proxy
 BINARY_DIR=bin
 
 # Version
-VERSION ?= 0.1.0
+VERSION ?= $(shell cat VERSION | tr -d '\n')
 LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 
 # Platforms
 PLATFORMS=darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64
 
-.PHONY: all build build-cli clean test deps tidy install-deps help
+.PHONY: all build build-cli build-proxy clean test deps tidy install-deps help
 
 # Default target
-all: clean deps build build-cli
+all: clean deps build build-cli build-proxy
 
 # Build main server
 build:
@@ -33,8 +34,12 @@ build:
 build-cli:
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(CLI_BINARY_NAME) ./cmd/$(CLI_BINARY_NAME)
 
+# Build proxy tool
+build-proxy:
+	$(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(PROXY_BINARY_NAME) ./cmd/$(PROXY_BINARY_NAME)
+
 # Build for current platform
-build-local: build build-cli
+build-local: build build-cli build-proxy
 
 # Cross-compile for all platforms
 build-all: clean
@@ -47,6 +52,7 @@ build-all: clean
 		echo "Building for $$OS/$$ARCH..."; \
 		GOOS=$$OS GOARCH=$$ARCH $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME)-$$OS-$$ARCH$$EXT ./cmd/$(BINARY_NAME); \
 		GOOS=$$OS GOARCH=$$ARCH $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(CLI_BINARY_NAME)-$$OS-$$ARCH$$EXT ./cmd/$(CLI_BINARY_NAME); \
+		GOOS=$$OS GOARCH=$$ARCH $(GOBUILD) $(LDFLAGS) -o $(BINARY_DIR)/$(PROXY_BINARY_NAME)-$$OS-$$ARCH$$EXT ./cmd/$(PROXY_BINARY_NAME); \
 	done
 
 # Install dependencies
@@ -159,6 +165,7 @@ package: build-all
 		mkdir -p releases/$$PKG_NAME; \
 		cp $(BINARY_DIR)/$(BINARY_NAME)-$$OS-$$ARCH$$EXT releases/$$PKG_NAME/$(BINARY_NAME)$$EXT; \
 		cp $(BINARY_DIR)/$(CLI_BINARY_NAME)-$$OS-$$ARCH$$EXT releases/$$PKG_NAME/$(CLI_BINARY_NAME)$$EXT; \
+		cp $(BINARY_DIR)/$(PROXY_BINARY_NAME)-$$OS-$$ARCH$$EXT releases/$$PKG_NAME/$(PROXY_BINARY_NAME)$$EXT; \
 		cp README.md releases/$$PKG_NAME/; \
 		cp -r configs releases/$$PKG_NAME/; \
 		cp -r scripts releases/$$PKG_NAME/; \
@@ -182,7 +189,8 @@ help:
 	@echo "Available targets:"
 	@echo "  build          Build main server binary"
 	@echo "  build-cli      Build CLI tool binary"
-	@echo "  build-local    Build both binaries for current platform"
+	@echo "  build-proxy    Build stdio-to-HTTP proxy for Claude compatibility"
+	@echo "  build-local    Build all binaries for current platform"
 	@echo "  build-all      Cross-compile for all platforms"
 	@echo "  clean          Clean build artifacts"
 	@echo "  deps           Install/update dependencies"
