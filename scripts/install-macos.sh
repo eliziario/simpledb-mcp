@@ -96,6 +96,18 @@ install_binary() {
         log_success "CLI tool installed"
     fi
     
+    # Also install proxy tool
+    if [[ -f "./bin/simpledb-mcp-proxy" ]]; then
+        if [[ ! -w "$INSTALL_DIR" ]]; then
+            sudo cp "./bin/simpledb-mcp-proxy" "$INSTALL_DIR/"
+            sudo chmod +x "$INSTALL_DIR/simpledb-mcp-proxy"
+        else
+            cp "./bin/simpledb-mcp-proxy" "$INSTALL_DIR/"
+            chmod +x "$INSTALL_DIR/simpledb-mcp-proxy"
+        fi
+        log_success "Proxy tool installed"
+    fi
+    
     log_success "Binary installed successfully"
 }
 
@@ -112,6 +124,12 @@ create_plist() {
     <key>ProgramArguments</key>
     <array>
         <string>$INSTALL_DIR/simpledb-mcp</string>
+        <string>-transport</string>
+        <string>http</string>
+        <string>-address</string>
+        <string>localhost:48384</string>
+        <string>-path</string>
+        <string>/mcp</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$HOME</string>

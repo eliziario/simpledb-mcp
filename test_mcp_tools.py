@@ -23,7 +23,7 @@ class TestResult:
 
 
 class MCPTester:
-    def __init__(self, base_url: str = "http://localhost:8080/mcp"):
+    def __init__(self, base_url: str = "http://localhost:48384/mcp"):
         self.base_url = base_url
         
     def send_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -528,8 +528,8 @@ def main():
     parser = argparse.ArgumentParser(description="Test SimpleDB MCP Server tools")
     parser.add_argument(
         "--url", 
-        default="http://localhost:8080/mcp",
-        help="MCP server URL (default: http://localhost:8080/mcp)"
+        default="http://localhost:48384/mcp",
+        help="MCP server URL (default: http://localhost:48384/mcp)"
     )
     parser.add_argument(
         "--tool",

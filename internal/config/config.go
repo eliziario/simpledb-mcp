@@ -25,6 +25,7 @@ type Connection struct {
    RoleArn   string `yaml:"role_arn,omitempty"`   // IAM role ARN for AWS Glue
    MFASerial string `yaml:"mfa_serial,omitempty"` // MFA device ARN for STS assume-role
    UseGauth  bool   `yaml:"use_gauth,omitempty"`  // Use gauth tool vs native macOS dialog
+   AthenaS3Output string `yaml:"athena_s3_output,omitempty"` // S3 bucket for Athena query results
 }
 
 type Settings struct {
@@ -71,7 +72,7 @@ func DefaultConfig() *Config {
 			},
 			Server: ServerSettings{
 				Transport: "stdio",
-				Address:   ":8080",
+				Address:   ":48384",
 				Path:      "/mcp",
 			},
 		},

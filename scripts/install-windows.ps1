@@ -106,6 +106,12 @@ function Install-Binaries {
         Write-Success "CLI tool installed"
     }
     
+    # Copy proxy tool if it exists
+    if (Test-Path ".\bin\simpledb-mcp-proxy.exe") {
+        Copy-Item ".\bin\simpledb-mcp-proxy.exe" "$InstallDir\" -Force
+        Write-Success "Proxy tool installed"
+    }
+    
     Write-Success "Binaries installed successfully"
 }
 

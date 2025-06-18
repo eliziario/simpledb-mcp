@@ -25,9 +25,9 @@ connections:
     role_arn: arn:aws:iam::123456789012:role/AdminRole  # IAM role ARN for assume-role
     mfa_serial: arn:aws:iam::123456789012:mfa/your.username  # MFA device ARN
     use_gauth: true  # Use gauth tool (true) or native macOS dialog (false/omitted)
+    athena_s3_output: s3://your-athena-results-bucket/results/  # S3 location for Athena query results
     # When use_gauth: true, uses ~/.config/.aws_menu.ini config and gauth tool
     # When use_gauth: false (or omitted), shows native macOS dialog for MFA input
-    # Requires AWS_ATHENA_S3_OUTPUT environment variable for table sampling
 
 settings:
   query_timeout: 30s

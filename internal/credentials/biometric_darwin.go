@@ -11,7 +11,6 @@ import (
 )
 
 func (m *Manager) getMacOSWithBiometric(key string) (string, error) {
-	// First try to authenticate with TouchID/FaceID
 	authenticated, err := touchid.Auth(touchid.DeviceTypeBiometrics, "SimpleDB MCP needs to access your database credentials")
 	if err != nil {
 		return "", fmt.Errorf("biometric authentication failed: %w", err)
@@ -21,7 +20,6 @@ func (m *Manager) getMacOSWithBiometric(key string) (string, error) {
 		return "", fmt.Errorf("biometric authentication was cancelled or failed")
 	}
 
-	// If authenticated, get the password from keychain
 	password, err := keyring.Get(ServiceName, key)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve password from keychain: %w", err)
